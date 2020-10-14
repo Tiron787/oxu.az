@@ -3,13 +3,13 @@ $url = 'https://ru.oxu.az/';
 $file = file_get_contents($url);
 $doc = phpQuery::newDocument($file);
 //парсим из страницы содержимое
-//test !!!
+
 
 
 
 function getLink($link)
 {
-    //return $link->find('')->text();
+    return $allIn = $link->find('.news-i-inner')->attr('href');
 }
 
 function getYear($years)
@@ -18,7 +18,6 @@ function getYear($years)
 
     $year = strtok($y, " \n");
     return $year;
-
 }
 
 function getTitle($title)
@@ -96,33 +95,21 @@ function getTimeSplit($doc)
     $OneNews = str_split($time, 6);
     return $value = (explode(":", $OneNews[0]));
 }
+
+
 $newsAll = getTitle($doc);
-$news = mb_strimwidth($newsAll, 0, 70, "...");
+$news = mb_strimwidth($newsAll, 0, 60, "...");
 $day = (int)getDay($doc);
 $mouth = (string)getMonth($doc);
 $year = (int)getYear($doc);
 $hour = (int)getTimeSplit($doc)[0];
 $minute = (int)getTimeSplit($doc)[1];
-//$getLink = getLink($doc);
+$newsLink = getLink($doc);
+
+
+// /usr/bin/wget -t 1 -O - http://action.od.ua/oxu.az/public_html/index.php
+// curl http://action.od.ua/oxu.az/public_html/index.php
 
 
 
-//
-/*$data =
-    [
-        "news" => $news,
-        "hour" => $day,
-        "minute" => $minute,
-        "year" => $year,
-        "mouth"=> $mouth,
-        "day"=> $day
-    ];*/
-
-
-//var_dump($news,$day,$mouth,$year,$hour,$minute);
-/*if (!isset($news,$day,$mouth,$year,$hour,$minute)) {
-    echo 'parse ok';
-} else {
-    echo 'parse error';
-}*/
 

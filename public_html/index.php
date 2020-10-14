@@ -1,4 +1,9 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+header('content-type: text/html; charset=utf-8');
+
+
 /*
 1 Переключатель времени обновления страницы
 2 Переключатель звукового сопровождения
@@ -6,24 +11,32 @@
 4 Частота выходов новостей 20мин.-2часа-3-5...
 5 Количество символов в новости.
 */
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 
-header('content-type: text/html; charset=utf-8');
 
 include '../library/phpQuery.php';
 include '../database/queryBuilder.php';
 include '../phpquery/pars.php';
+include '../phpquery/parsOneNews.php';
 
 
+//интервал секунд. равный часу
+$FixTimeInterval = 3600;
+//создаём новый экземпляр класса queryBuilder
 
-$db = new queryBuilder($dsn, $user, $password);
-
+//название таблицы
 $table = 'oxu_news';
+//текущее время unix
 $UNIX = time();
+//$date = date('');
+$date = date("m.d.y h:i ");
 
+$howManyCharacters = iconv_strlen($oneNewsText) - 338;
+$db = new queryBuilder($dsn, $user, $password);
 $tasks = $db->getAll($table);
-$difference = CheekDifference($tasks, $UNIX);
+
+$difference = CheekDifferenceB($tasks, $minute);
+
+
 $data =
     [
         "news" => $news,
@@ -33,241 +46,169 @@ $data =
         "mouth" => $mouth,
         "day" => $day,
         "difference" => $difference,
-        "UNIX" => $UNIX
+        "UNIX" => $UNIX,
+        "newsLink" => $newsLink,
+        "Characters" => $howManyCharacters,
+        "date" => $date
 
     ];
-
-
-$lastBaseNews = $tasks[0]['hour'] . $tasks[0]['minute'];
-$NewsRelease = $data ['hour'] . $data ['minute'];
-if (strcmp($lastBaseNews, $NewsRelease) !== 0) {
-    $db->store($data);
-    echo $sound = '/www/action.od.ua/oxu.az/content/s.mp3';
-
-    $audio = "";
-
-    echo $audio;
+addNewNews($table, $data, $tasks, $db);
+function CheekDifferenceB($oldMin, $lastMin)
+{           //вычесляем разницу между новостями
+    if ($lastMin < $oldMin[0]['minute']) {
+        $var = 60 - $oldMin[0]['minute'];
+        $result = $var + $lastMin;
+    } else {
+        $result = $lastMin - $oldMin[0]['minute'];
+    }
+    return $result;
 }
 
-function CheekDifference($lastTime, $timeNow)
+function addNewNews($table, $data, $tasks, $db)
 {
-    $sec = $timeNow - $lastTime[0]['UNIX'];
-    return $minutes = floor($sec / 60);
+    $lastBaseNews = $tasks[0]['hour'] . $tasks[0]['minute'];
+    $NewsRelease = $data ['hour'] . $data ['minute'];
+    if (strcmp($lastBaseNews, $NewsRelease) !== 0) {
+        $db->store($data, $table);
+
+    }
+}
+
+function timeTrim($UnixTime, $interval)
+{  //вычесляем интервал, отнимаем от текущего времени unix Фиксированый интервал.
+    return $result = $UnixTime - $interval;
 }
 
 
-$interval = 3600;
-
-function timeTrim($time, $interval)
-{
-    return $result = $time - $interval;
-
-}
-
-$result = timeTrim($UNIX, $interval);
-$NewsCount = ($db->getSpecialTime($table, $result));
+//заносим интервал в переменную $ResultInterval
+$ResultInterval = timeTrim($UNIX, $FixTimeInterval);
+//выбираем из базы поля которые меньше текущего времени - (1 час)
+$NewsCount = ($db->getSpecialTime($table, $ResultInterval));
+//получаем колличество вернувшихся полей UNIX из базы, получаем количество новостей в час
 $HowManyNews = count($NewsCount);
 
+
+//обращаемся к методу queryBuilder
+$average = $db->getAverageTime($table, $ResultInterval);
+//считаем Среднее время выхода новостей за последний
+function getAverageMin($average)
+{
+    $coin = count($average);  //считаем колличество новостей
+    $sum = 0;
+    foreach ($average as $value) {
+        $sum += $value['difference'];
+    }
+    $text = $sum / $coin; // делим сумму новостей на колличество новостей
+    $result = mb_eregi_replace("(.*)[^.]{12}$", '\\1', $text); //отрезаем 12 символов с конца
+
+
+    return $result;
+}
+
+$averageNews = getAverageMin($average);
+
+
 ?>
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
-              integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
-              crossorigin="anonymous">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+          integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+          crossorigin="anonymous">
+    <link rel="stylesheet" href="/styles/style.css">
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+        google.charts.load('current', {'packages': ['corechart']});
+        google.charts.setOnLoadCallback(drawChart);
 
-        <!--автообновление-->
-        <meta http-equiv="Refresh" content="30"/>
-        <title>oxu.az voice control</title>
-    </head>
+        function drawChart() {
+            var data = google.visualization.arrayToDataTable([
+                ['minute', 'интервал'],
+                [0, <?=$tasks[0]['difference']?>],
+                [1, <?=$tasks[1]['difference']?>],
+                [2, <?=$tasks[2]['difference']?>],
+                [3, <?=$tasks[3]['difference']?>],
+                [4, <?=$tasks[4]['difference']?>],
+                [5, <?=$tasks[5]['difference']?>],
+                [6, <?=$tasks[6]['difference']?>],
+                [7, <?=$tasks[7]['difference']?>],
+                [8, <?=$tasks[8]['difference']?>],
+                [9, <?=$tasks[9]['difference']?>],
+                [10, <?=$tasks[10]['difference']?>],
+                [11, <?=$tasks[11]['difference']?>],
+                [12, <?=$tasks[12]['difference']?>],
+                [13, <?=$tasks[13]['difference']?>],
+                [14, <?=$tasks[14]['difference']?>],
+                [15, <?=$tasks[15]['difference']?>],
+                [16, <?=$tasks[16]['difference']?>],
+                [17, <?=$tasks[17]['difference']?>],
+                [18, <?=$tasks[18]['difference']?>],
+                [19, <?=$tasks[19]['difference']?>],
+                [20, <?=$tasks[20]['difference']?>],
 
 
-    <body>
-    <h5 class="display-5">oxu.az voice control</h5>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <a class="navbar-brand" href="#"></a>
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavDropdown"
-                aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNavDropdown">
-            <ul class="navbar-nav">
-                <h5 class="display-4">Amount of news per hour </h5>
-                <h5 class="display-4">&nbsp;'<? echo $HowManyNews ?>'</h5>
+            ]);
 
-            </ul>
-        </div>
-    </nav>
-    <div class="container">
-        <div class="row">
-            <div class="col-md-12">
+            var options = {
+                title: 'График нагрузки',
+                hAxis: {title: 'количество новостей', titleTextStyle: {color: '#333'}},
+                vAxis: {title: 'частота минут', minValue: 0}
+            };
 
-                <table class="table table-inverse">
-                    <thead>
+            var chart = new google.visualization.AreaChart(document.getElementById('chart_div'));
+            chart.draw(data, options);
+        }
+    </script>
+
+    <!--автообновление-->
+    <meta http-equiv="Refresh" content="30"/>
+    <title>oxu.az voice control</title>
+</head>
+<body>
+
+<!--<script src="https://cdn.anychart.com/js/latest/anychart-bundle.min.js"></script>
+<script src="../Chart/LineChart.js"></script>-->
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h3 class="display-5">oxu.az voice control</h3>
+            <h5 class="display-5">Колличество новостей за последний час: '<? echo $HowManyNews ?>' </h5>
+            <h5 class="display-5">Среднее время выхода новостей за последний час: '<? echo $averageNews ?>' мин.</h5>
+            <div id="chart_div" style="width: 100%; height: 300px;"></div>
+            <table class="table table-inverse">
+                <thead>
+                <tr>
+                    <th>news</th>
+                    <th>link</th>
+                    <th>Время(Az)</th>
+                    <th>Дата(Az)</th>
+                    <th>symbol</th>
+                    <th>interval(мин.)</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($tasks as $task): ?>
                     <tr>
-                        <th>ID</th>
-                        <th>news</th>
-                        <th>hour (Az)</th>
-                        <th>minute</th>
-                        <th>day</th>
-                        <th>mouth</th>
-                        <th>interval</th>
+
+                        <td><?= $task['news']; ?></td>
+                        <td><p><a href="<?= 'https://ru.oxu.az/' . $task['newsLink'] ?>">Link</a>
+                        <td><?= $task['hour'] . ':' ?><?= (iconv_strlen($task['minute']) >= 2) ? $task['minute'] : '0' . $task['minute']; ?></td>
+                        <td><?= $task['day'] . '.' . $task ['mouth'] . '.' . $task['year'] ?></td>
+                        <td><?= $task['Characters']; ?></td>
+                        <td><?= $task['difference']; ?></td>
 
                     </tr>
-                    </thead>
-                    <tbody>
-                    <?php foreach ($tasks as $task): ?>
-                        <tr>
-                            <td><?= $task['id']; ?></td>
-                            <td><?= $task['news']; ?></td>
-                            <td><?= $task['hour']; ?></td>
-                            <td><?= (iconv_strlen($task['minute']) >= 2) ? $task['minute'] : '0' . $task['minute'] ?></td>
-                            <td><?= $task['day']; ?></td>
-                            <td><?= $task['mouth']; ?></td>
-
-                            <td><?= $task['difference']; ?></td>
-
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
-    </body>
-    </html>
+    </div>
+</body>
+</html>
 
 <?php
-/*if ($NewsRelease !== $NewsRelease) {
 
-} else {
-    exit;
-}*/
 ?>
 
 
-<?php
-/*function time($h,$m){
-
-}
-time();*/
-/*foreach ($time2 as $key => $value){
-/*
-$time1[$key]  = $value;
-print_r($time1['2']);
-}*/
-
-/*
-
-$day = str_split($time1, 2);
-//$arr1 = str_split($time1);
-echo "<br>";
-echo '<pre>';
-print_r($time1[1]);
-echo '</pre>';*/
-
-//print_r($arr1);
-/*foreach ($arr1 as $value){
-    $second[] = mktime(2, 4, 0, 7, 20, 2020);
-
-    var_dump($second);
-
-}*/
-//
-
-
-//parse_str($dateDay, $output)
-
-
-//$date[] = $dateDay;
-
-
-/*  foreach($date as $value) {
-
-      print_r($second);
-
-  }*/
-
-//$minute = $second / 60;
-
-/*function getSecond($hour, $minute, $month, $day, $month, $day)
-{
-
-    echo $minute;
-getSecond($one_news_time);
-}*/
-
-/*$ent = pq($row);
-$name = $ent->text();
-
-$data['breadcrumbs'][$name] = $url;*/
-
-/*
-echo '<pre>';
-print_r($one_news_time);
-echo '</pre>';*/
-
-
-/*;*/
-
-//вырезаем 6 символов из строки и зансим их в массив каждый с отдельными
-// индексами
-
-
-/*getSecond($hour);
-echo "<br>";
-print_r(hour($one_news_time));
-echo 'Сейчас:' . date('d-m-Y') . "\n";*/
-
-
-/*foreach ($one_news_time as $value ){
-
-
-
-
-}
-
-}
-function minute($one_news_time)
-{
-    $m = $one_news_time['0'];
-}
-
-
-//print_r (hour($one_news_time)) ;
-echo "<br>";
-//возвращаем
-
-
-
-//getSecond();
-
-
-
-//$difference
-//$str = $doc->find('#selectByPb div:')->text();
-//var_dump($pieces);
-//$time = explode(" ", $pieces);
-
-echo "<br>";
-
-
-//echo time('h-m');
-//print_r(date_parse("2006-12-12 10:00:00.5"));
-
-
-//list($var1, $var2, $var3) = explode(" ", $result);
-//echo $var1; // foo
-//echo $var2; // **/
-
-
-//echo htmlspecialchars($article_time);
-/*$one = 2;
-$two = 5;
-function  one_and_two($one,$two)
-{ global  $sum;
-    global $min;
-    global $prod;
-    $sum = $one + $two;
-    $min = $one - $two;
-    $prod = $one * $two;*/
-?>
